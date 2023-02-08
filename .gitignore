@@ -9,3 +9,9 @@ utils/build/*
 
 # outputs
 outputs/
+
+# hcr add
+1
+3detr.zip
+log_record.log
+nohup.out

@@ -2,6 +2,8 @@
 
 import argparse
 import os
+os.environ["NCCL_DEBUG"] = "INFO"
+# os.environ['CUDA_VISIBLE_DEVICES'] = "1,2"
 import sys
 import pickle
 
@@ -102,7 +104,7 @@ def make_args_parser():
 
     ##### Dataset #####
     parser.add_argument(
-        "--dataset_name", required=True, type=str, choices=["scannet", "sunrgbd"]
+        "--dataset_name", required=True, type=str, choices=["scannet", "sunrgbd", "kitti"]
     )
     parser.add_argument(
         "--dataset_root_dir",
@@ -118,8 +120,8 @@ def make_args_parser():
         help="Root directory containing the metadata files. \
               If None, default values from scannet.py/sunrgbd.py are used",
     )
-    parser.add_argument("--dataset_num_workers", default=4, type=int)
-    parser.add_argument("--batchsize_per_gpu", default=8, type=int)
+    parser.add_argument("--dataset_num_workers", default=8, type=int)
+    parser.add_argument("--batchsize_per_gpu", default=10, type=int)
 
     ##### Training #####
     parser.add_argument("--start_epoch", default=-1, type=int)
@@ -353,6 +355,11 @@ def main(local_rank, args):
 
     datasets, dataset_config = build_dataset(args)
     model, _ = build_model(args, dataset_config)
+
+    #load ckp
+    pre_ckp = torch.load('outputs/kitti_300/checkpoint_best.pth')
+    model.load_state_dict(pre_ckp["model"])
+
     model = model.cuda(local_rank)
     model_no_ddp = model
 
