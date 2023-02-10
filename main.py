@@ -121,7 +121,7 @@ def make_args_parser():
               If None, default values from scannet.py/sunrgbd.py are used",
     )
     parser.add_argument("--dataset_num_workers", default=8, type=int)
-    parser.add_argument("--batchsize_per_gpu", default=10, type=int)
+    parser.add_argument("--batchsize_per_gpu", default=24, type=int)
 
     ##### Training #####
     parser.add_argument("--start_epoch", default=-1, type=int)
@@ -362,11 +362,12 @@ def main(local_rank, args):
 
     model = model.cuda(local_rank)
     model_no_ddp = model
+    model = torch.nn.DataParallel(model)
 
     if is_distributed():
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
         model = torch.nn.parallel.DistributedDataParallel(
-            model, device_ids=[local_rank]
+            model, device_ids=[local_rank], find_unused_parameters=True
         )
     criterion = build_criterion(args, dataset_config)
     criterion = criterion.cuda(local_rank)
@@ -382,7 +383,7 @@ def main(local_rank, args):
         else:
             shuffle = False
         if is_distributed():
-            sampler = DistributedSampler(datasets[split], shuffle=shuffle)
+            sampler = DistributedSampler(datasets[split], shuffle=False)
         elif shuffle:
             sampler = torch.utils.data.RandomSampler(datasets[split])
         else:

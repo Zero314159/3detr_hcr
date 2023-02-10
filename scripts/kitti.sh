@@ -13,7 +13,6 @@ python main.py \
 --loss_no_object_weight 0.25 \
 --eval_every_epoch 10 \
 --save_separate_checkpoint_every_epoch -1 \
---ngpus 2 \
 --base_lr 1e-5 \
 --warm_lr_epochs 50 \
 --checkpoint_dir outputs/kitti_1080 
