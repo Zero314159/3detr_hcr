@@ -272,7 +272,7 @@ class KittiDatasetConfig(object):
 
     def my_compute_box_3d(self, center, size, heading_angle):
         '''convert (center, size, angle) to 8 corners of box.'''
-        R = pc_util.rotz(heading_angle)
+        R = pc_util.rotz(-1 * heading_angle)
         l, w, h = size
         x_corners = [-l, l, l, -l, -l, l, l, -l]
         y_corners = [w, w, -w, -w, w, w, -w, -w]
@@ -361,7 +361,7 @@ class KittiDetectionDataset(Dataset):
             center = np.average(box3d_pts_3d_velo, axis=0)
             bbox = [center[0], center[1], center[2], 
                     obj.l / 2.0, obj.w / 2.0, obj.h / 2.0,
-                    -obj.ry - np.pi / 2.0, self.dataset_config.type2class[obj.type]]
+                    obj.ry + np.pi / 2.0, self.dataset_config.type2class[obj.type]]
             bboxes.append(bbox)
         bboxes = np.array(bboxes) # K,8
         
@@ -391,7 +391,7 @@ class KittiDetectionDataset(Dataset):
 
             point_cloud[:, 0:3] = np.dot(point_cloud[:, 0:3], np.transpose(rot_mat))
             bboxes[:, 0:3] = np.dot(bboxes[:, 0:3], np.transpose(rot_mat))
-            bboxes[:, 6] += rot_angle
+            bboxes[:, 6] -= rot_angle
 
             # Augment point cloud scale: 0.85x-1.15x
             scale_ratio = np.random.random() * 0.3 + 0.85
@@ -424,7 +424,7 @@ class KittiDetectionDataset(Dataset):
         for i in range(bboxes.shape[0]):
             bbox = bboxes[i]
             semantic_class = bbox[7]
-            box3d_size = bbox[3:6] * 2
+            box3d_size = bbox[3:6] * 2.0
             raw_sizes[i, :] = box3d_size
             angle_class, angle_residual = self.dataset_config.angle2class(bbox[6])
             angle_classes[i] = angle_class
