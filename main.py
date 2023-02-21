@@ -120,8 +120,8 @@ def make_args_parser():
         help="Root directory containing the metadata files. \
               If None, default values from scannet.py/sunrgbd.py are used",
     )
-    parser.add_argument("--dataset_num_workers", default=8, type=int)
-    parser.add_argument("--batchsize_per_gpu", default=24, type=int)
+    parser.add_argument("--dataset_num_workers", default=4, type=int)
+    parser.add_argument("--batchsize_per_gpu", default=16, type=int)
 
     ##### Training #####
     parser.add_argument("--start_epoch", default=-1, type=int)
@@ -357,8 +357,8 @@ def main(local_rank, args):
     model, _ = build_model(args, dataset_config)
 
     #load ckp
-    pre_ckp = torch.load('outputs/kitti_300/checkpoint_best.pth')
-    model.load_state_dict(pre_ckp["model"])
+    # pre_ckp = torch.load('outputs/kitti_300/checkpoint_best.pth')
+    # model.load_state_dict(pre_ckp["model"])
 
     model = model.cuda(local_rank)
     model_no_ddp = model
@@ -395,6 +395,8 @@ def main(local_rank, args):
             batch_size=args.batchsize_per_gpu,
             num_workers=args.dataset_num_workers,
             worker_init_fn=my_worker_init_fn,
+            pin_memory=True,
+            # prefetch_factor=2,
         )
         dataloaders[split + "_sampler"] = sampler
 

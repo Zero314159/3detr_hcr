@@ -1,6 +1,6 @@
 python -m torch.distributed.launch --nproc_per_node=2 \
 
-CUDA_VISIBLE_DEVICES=1,2 \
+CUDA_VISIBLE_DEVICES=0,1 \
 python main.py \
 --dataset_name kitti \
 --nqueries 256 \
@@ -13,6 +13,4 @@ python main.py \
 --loss_no_object_weight 0.25 \
 --eval_every_epoch 10 \
 --save_separate_checkpoint_every_epoch -1 \
---base_lr 1e-5 \
---warm_lr_epochs 50 \
 --checkpoint_dir outputs/kitti_1080 

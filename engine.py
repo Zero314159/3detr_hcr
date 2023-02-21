@@ -83,6 +83,8 @@ def train_one_epoch(
             "point_clouds": batch_data_label["point_clouds"],
             "point_cloud_dims_min": batch_data_label["point_cloud_dims_min"],
             "point_cloud_dims_max": batch_data_label["point_cloud_dims_max"],
+            "gt_box_centers": batch_data_label["gt_box_centers"],
+
         }
         outputs = model(inputs)
 
@@ -175,6 +177,8 @@ def evaluate(
             "point_clouds": batch_data_label["point_clouds"],
             "point_cloud_dims_min": batch_data_label["point_cloud_dims_min"],
             "point_cloud_dims_max": batch_data_label["point_cloud_dims_max"],
+            "gt_box_centers": None,
+
         }
         outputs = model(inputs)
 

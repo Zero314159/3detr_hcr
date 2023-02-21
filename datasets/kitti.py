@@ -204,7 +204,7 @@ class KittiDatasetConfig(object):
     def __init__(self):
         self.num_semcls = 8
         self.num_angle_bin = 12
-        self.max_num_obj = 30
+        self.max_num_obj = 20
         self.type2class = {
             "Car": 0, 
             "Van": 1, 
@@ -290,7 +290,7 @@ class KittiDetectionDataset(Dataset):
         split_set="train",
         root_dir=None,
         meta_data_dir=None,
-        num_points=100000,
+        num_points=50000,
         use_color=False,
         use_height=False,
         augment=False,
@@ -336,7 +336,7 @@ class KittiDetectionDataset(Dataset):
             np.zeros((1, 3), dtype=np.float32),
             np.ones((1, 3), dtype=np.float32),
         ]
-        self.max_num_obj = 30
+        self.max_num_obj = 20
 
     def __len__(self):
         return len(self.scan_names)
@@ -351,6 +351,11 @@ class KittiDetectionDataset(Dataset):
         objects = read_label(scan_path.replace("velodyne", "label_2") + ".txt")
         calib = Calibration(scan_path.replace("velodyne", "calib") + ".txt")
 
+        point_cloud = point_cloud[point_cloud[:, 0] > -5.]
+        point_cloud = point_cloud[point_cloud[:, 0] < 15.]
+        point_cloud = point_cloud[point_cloud[:, 1] > -15.]
+        point_cloud = point_cloud[point_cloud[:, 1] < 15.]
+
         bboxes = []
         for obj in objects:
             if obj.type == "DontCare":
@@ -358,6 +363,12 @@ class KittiDetectionDataset(Dataset):
             # Draw 3d bounding box
             box3d_pts_3d = compute_box_3d(obj, calib.P)
             box3d_pts_3d_velo = calib.project_rect_to_velo(box3d_pts_3d)
+
+            top = np.max(box3d_pts_3d_velo, axis = 0)
+            bottom = np.min(box3d_pts_3d_velo, axis = 0)
+            if top[0] > 15.0 or top[1] > 15.0 or bottom[0] < -5.0 or bottom[1] < -15.0:
+                continue
+
             center = np.average(box3d_pts_3d_velo, axis=0)
             bbox = [center[0], center[1], center[2], 
                     obj.l / 2.0, obj.w / 2.0, obj.h / 2.0,
@@ -381,9 +392,9 @@ class KittiDetectionDataset(Dataset):
         if self.augment:
             if np.random.random() > 0.5:
                 # Flipping along the YZ plane
-                point_cloud[:, 0] = -1 * point_cloud[:, 0]
-                bboxes[:, 0] = -1 * bboxes[:, 0]
-                bboxes[:, 6] = np.pi - bboxes[:, 6]
+                point_cloud[:, 1] = -1 * point_cloud[:, 1]
+                bboxes[:, 1] = -1 * bboxes[:, 1]
+                bboxes[:, 6] = -bboxes[:, 6]
 
             # Rotation along up-axis/Z-axis
             rot_angle = (np.random.random() * np.pi / 3) - np.pi / 6  # -30 ~ +30 degree
@@ -394,14 +405,14 @@ class KittiDetectionDataset(Dataset):
             bboxes[:, 6] -= rot_angle
 
             # Augment point cloud scale: 0.85x-1.15x
-            scale_ratio = np.random.random() * 0.3 + 0.85
-            scale_ratio = np.expand_dims(np.tile(scale_ratio, 3), 0)
-            point_cloud[:, 0:3] *= scale_ratio
-            bboxes[:, 0:3] *= scale_ratio
-            bboxes[:, 3:6] *= scale_ratio
+            # scale_ratio = np.random.random() * 0.3 + 0.85
+            # scale_ratio = np.expand_dims(np.tile(scale_ratio, 3), 0)
+            # point_cloud[:, 0:3] *= scale_ratio
+            # bboxes[:, 0:3] *= scale_ratio
+            # bboxes[:, 3:6] *= scale_ratio
 
-            if self.use_height:
-                point_cloud[:, -1] *= scale_ratio[0, 0]
+            # if self.use_height:
+            #     point_cloud[:, -1] *= scale_ratio[0, 0]
 
             if self.use_random_cuboid:
                 point_cloud, bboxes, _ = self.random_cuboid_augmentor(

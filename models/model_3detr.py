@@ -33,6 +33,9 @@ class BoxProcessor(object):
 
     def compute_predicted_size(self, size_normalized, point_cloud_dims):
         scene_scale = point_cloud_dims[1] - point_cloud_dims[0]
+        scene_scale[:, 0] = 20.0    #fixed scene scale
+        scene_scale[:, 1] = 4.0
+        scene_scale[:, 2] = 5.0
         scene_scale = torch.clamp(scene_scale, min=1e-1)
         size_unnormalized = scale_points(size_normalized, mult_factor=scene_scale)
         return size_unnormalized
@@ -163,12 +166,24 @@ class Model3DETR(nn.Module):
         ]
         self.mlp_heads = nn.ModuleDict(mlp_heads)
 
-    def get_query_embeddings(self, encoder_xyz, point_cloud_dims):
-        query_inds = furthest_point_sample(encoder_xyz, self.num_queries)
+    def get_query_embeddings(self, encoder_xyz, point_cloud_dims, gt_box_centers = None):
+        encoder_xyz_cp = encoder_xyz.clone()
+        encoder_xyz_cp[encoder_xyz_cp[:,:,2] < -1.5] = torch.zeros(3).to(encoder_xyz_cp.get_device())
+        encoder_xyz_cp[encoder_xyz_cp[:,:,2] > -0.5] = torch.zeros(3).to(encoder_xyz_cp.get_device())
+        query_inds = furthest_point_sample(encoder_xyz_cp, self.num_queries)
         query_inds = query_inds.long()
-        query_xyz = [torch.gather(encoder_xyz[..., x], 1, query_inds) for x in range(3)]
+        query_xyz = [torch.gather(encoder_xyz_cp[..., x], 1, query_inds) for x in range(3)]
         query_xyz = torch.stack(query_xyz)
         query_xyz = query_xyz.permute(1, 2, 0)
+
+        if gt_box_centers != None:
+            if np.random.random() < 0.3:
+                for i in range(gt_box_centers.shape[0]):
+                    for j in range(gt_box_centers.shape[1]):
+                        if gt_box_centers[i,j,:].norm() > 1e-2:
+                            query_xyz[i,j,:] = gt_box_centers[i,j,:] + (torch.rand(1, 3).to(query_xyz.get_device()) - 0.5)
+                        else:
+                            break
 
         # Gater op above can be replaced by the three lines below from the pointnet2 codebase
         # xyz_flipped = encoder_xyz.transpose(1, 2).contiguous()
@@ -229,7 +244,7 @@ class Model3DETR(nn.Module):
         # mlp head outputs are (num_layers x batch) x noutput x nqueries, so transpose last two dims
         cls_logits = self.mlp_heads["sem_cls_head"](box_features).transpose(1, 2)
         center_offset = (
-            self.mlp_heads["center_head"](box_features).sigmoid().transpose(1, 2) - 0.5
+            self.mlp_heads["center_head"](box_features).sigmoid().transpose(1, 2) * 2.0 - 1.0
         )
         size_normalized = (
             self.mlp_heads["size_head"](box_features).sigmoid().transpose(1, 2)
@@ -305,6 +320,7 @@ class Model3DETR(nn.Module):
 
     def forward(self, inputs, encoder_only=False):
         point_clouds = inputs["point_clouds"]
+        gt_box_centers = inputs["gt_box_centers"]
 
         enc_xyz, enc_features, enc_inds = self.run_encoder(point_clouds)
         enc_features = self.encoder_to_decoder_projection(
@@ -321,7 +337,7 @@ class Model3DETR(nn.Module):
             inputs["point_cloud_dims_min"],
             inputs["point_cloud_dims_max"],
         ]
-        query_xyz, query_embed = self.get_query_embeddings(enc_xyz, point_cloud_dims)
+        query_xyz, query_embed = self.get_query_embeddings(enc_xyz, point_cloud_dims, gt_box_centers=gt_box_centers)
         # query_embed: batch x channel x npoint
         enc_pos = self.pos_embedding(enc_xyz, input_range=point_cloud_dims)
 
