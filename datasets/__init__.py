@@ -2,12 +2,14 @@
 from .scannet import ScannetDetectionDataset, ScannetDatasetConfig
 from .sunrgbd import SunrgbdDetectionDataset, SunrgbdDatasetConfig
 from .kitti import KittiDetectionDataset, KittiDatasetConfig
+from .kitti360 import Kitti360DetectionDataset, Kitti360DatasetConfig
 
 
 DATASET_FUNCTIONS = {
     "scannet": [ScannetDetectionDataset, ScannetDatasetConfig],
     "sunrgbd": [SunrgbdDetectionDataset, SunrgbdDatasetConfig],
     "kitti": [KittiDetectionDataset, KittiDatasetConfig],
+    "kitti360": [Kitti360DetectionDataset, Kitti360DatasetConfig],
 }
 
 
