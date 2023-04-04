@@ -9,6 +9,7 @@ import torch
 import numpy as np
 from scipy.spatial import ConvexHull, Delaunay
 from utils.misc import to_list_1d, to_list_3d
+from .box_intersection_2d import oriented_box_intersection_2d
 
 try:
     from utils.box_intersection import box_intersection
@@ -574,32 +575,38 @@ def generalized_box3d_iou_tensor(
     good_boxes = (enclosing_vols > 2 * EPS) * (sum_vols > 4 * EPS)
 
     if rotated_boxes:
-        inter_areas = torch.zeros((B, K1, K2), dtype=torch.float32)
-        rect1 = rect1.cpu()
-        rect2 = rect2.cpu()
-        nums_k2_np = to_list_1d(nums_k2)
-        non_rot_inter_areas_np = to_list_3d(non_rot_inter_areas)
-        for b in range(B):
-            for k1 in range(K1):
-                for k2 in range(K2):
-                    if nums_k2 is not None and k2 >= nums_k2_np[b]:
-                        break
-                    if non_rot_inter_areas_np[b][k1][k2] == 0:
-                        continue
-                    ##### compute volume of intersection
-                    inter = polygon_clip_unnest(rect1[b, k1], rect2[b, k2])
-                    if len(inter) > 0:
-                        xs = torch.stack([x[0] for x in inter])
-                        ys = torch.stack([x[1] for x in inter])
-                        inter_areas[b, k1, k2] = torch.abs(
-                            torch.dot(xs, torch.roll(ys, 1))
-                            - torch.dot(ys, torch.roll(xs, 1))
-                        )
-        inter_areas.mul_(0.5)
+
+        rect1_rp = rect1.repeat(1, 1, K2, 1).reshape(B, K1 * K2, 4, 2)
+        rect2_rp = rect2.repeat(1, K1, 1, 1)
+        inter_areas, _ = oriented_box_intersection_2d(rect1_rp, rect2_rp)
+        inter_areas = inter_areas.reshape(B, K1, K2) * (vols1 > 2 * EPS).unsqueeze(-1) * (vols2 > 2 * EPS).unsqueeze(1)
+
+        # inter_areas = torch.zeros((B, K1, K2), dtype=torch.float32)
+        # rect1 = rect1.cpu()
+        # rect2 = rect2.cpu()
+        # nums_k2_np = to_list_1d(nums_k2)
+        # non_rot_inter_areas_np = to_list_3d(non_rot_inter_areas)
+        # for b in range(B):
+        #     for k1 in range(K1):
+        #         for k2 in range(K2):
+        #             if nums_k2 is not None and k2 >= nums_k2_np[b]:
+        #                 break
+        #             if non_rot_inter_areas_np[b][k1][k2] == 0:
+        #                 continue
+        #             ##### compute volume of intersection
+        #             inter = polygon_clip_unnest(rect1[b, k1], rect2[b, k2])
+        #             if len(inter) > 0:
+        #                 xs = torch.stack([x[0] for x in inter])
+        #                 ys = torch.stack([x[1] for x in inter])
+        #                 inter_areas[b, k1, k2] = torch.abs(
+        #                     torch.dot(xs, torch.roll(ys, 1))
+        #                     - torch.dot(ys, torch.roll(xs, 1))
+        #                 )
+        # inter_areas.mul_(0.5)
     else:
         inter_areas = non_rot_inter_areas
 
-    inter_areas = inter_areas.to(corners1.device)
+    # inter_areas = inter_areas.to(corners1.device)
     ### gIOU = iou - (1 - sum_vols/enclose_vol)
     inter_vols = inter_areas * height
     if return_inter_vols_only:
@@ -618,7 +625,8 @@ def generalized_box3d_iou_tensor(
     return gious
 
 
-generalized_box3d_iou_tensor_jit = torch.jit.script(generalized_box3d_iou_tensor)
+# generalized_box3d_iou_tensor_jit = torch.jit.script(generalized_box3d_iou_tensor)
+generalized_box3d_iou_tensor_jit = generalized_box3d_iou_tensor
 
 
 def generalized_box3d_iou_cython(

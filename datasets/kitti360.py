@@ -19,37 +19,36 @@ import math
 
 DATA_PATH = "/home/hcr/Data/KITTI-360/" ## Replace with path to dataset
 
+def loadPoses(pos_file):
+  ''' load system poses '''
+
+  data = np.loadtxt(pos_file)
+  ts = data[:, 0].astype(np.int)
+  poses = np.reshape(data[:, 1:], (-1, 3, 4))
+  poses = np.concatenate((poses, np.tile(np.array([0, 0, 0, 1]).reshape(1,1,4),(poses.shape[0],1,1))), 1)
+  return ts, poses
+
 kitti2me = {
-    10 : 0,#'building'
-    11 : 1,#'garage'
-    12 : 2,#'car'
-    13 : 3,#'truck'
-    14 : 4,#'trailer'
-    16 : 5,#'motorcycle'
-    17 : 6,#'bicycle'
-    18 : 7,#'person'
-    25 : 8,#'trash bin'
-    26 : 9,#'vending machine'
-    27 : 10,#'box'
+    12 : 0,#'car'
+    13 : 1,#'truck'
+    14 : 2,#'trailer'
+    16 : 3,#'motorcycle'
+    17 : 4,#'bicycle'
+    18 : 5,#'person'
 }
 
 class Kitti360DatasetConfig(object):
     def __init__(self):
-        self.num_semcls = 11
-        self.num_angle_bin = 12
+        self.num_semcls = 6
+        self.num_angle_bin = 2
         self.max_num_obj = 20
         self.type2class = {
-            'building': 0,
-            'garage': 1,
-            'car': 2,
-            'truck': 3,
-            'trailer': 4,
-            'motorcycle': 5,
-            'bicycle': 6,
-            'person': 7,
-            'trash bin': 8,
-            'vending machine': 9,
-            'box': 10,
+            'car': 0,
+            'truck': 1,
+            'trailer': 2,
+            'motorcycle': 3,
+            'bicycle': 4,
+            'person': 5,
         }
         self.class2type = {self.type2class[t]: t for t in self.type2class}
 
@@ -170,6 +169,10 @@ class Kitti360DetectionDataset(Dataset):
             label3DBboxPath = os.path.join(root_dir, 'data_3d_bboxes')
             annotation3D = Annotation3D(label3DBboxPath, sequence)
             annotation3DPly = Annotation3DPly(label3DPcdPath, sequence)
+            posePath = os.path.join(root_dir, 'data_poses', sequence, 'poses.txt')
+
+            ts, poses = loadPoses(posePath)
+            ts_idx = 0
 
             all_bboxes = []
             semanticlabels = []
@@ -185,39 +188,46 @@ class Kitti360DetectionDataset(Dataset):
                     bboxes_window.append([obj.start_frame, obj.end_frame])
             
             if split_set == 'train':
-                pcdFilelist = annotation3DPly.pcdFileList[:int(0.8 * len(annotation3DPly.pcdFileList))]
+                pcdFilelist = annotation3DPly.pcdFileList[:int(0.7 * len(annotation3DPly.pcdFileList))]
                 # pcdFilelist = annotation3DPly.pcdFileList
             else:
-                pcdFilelist = annotation3DPly.pcdFileList[int(0.8 * len(annotation3DPly.pcdFileList)):]
+                pcdFilelist = annotation3DPly.pcdFileList[int(0.7 * len(annotation3DPly.pcdFileList)):]
             
             for pcdFile in pcdFilelist:
                 window = pcdFile.split(os.sep)[-1]
-                window = window.split('_')[0]
-                window = int(window)
+                window = window.split('_')
+                window[1] = window[1].split('.')[0]
+                window = [int(i) for i in window]
 
                 data = read_ply(pcdFile)
                 pcd_np = np.vstack((data['x'], data['y'], data['z'])).T
 
-                x_cur = np.min(pcd_np, axis=0)[0]
-                while x_cur + 20. < np.max(pcd_np, axis=0)[0]:
-                    y_cur = np.min(pcd_np, axis=0)[1]
-                    while y_cur + 20. < np.max(pcd_np, axis=0)[1]:
-                        pcd_np_part = pcd_np[pcd_np[:, 0] > x_cur]
-                        pcd_np_part = pcd_np_part[pcd_np_part[:, 0] < x_cur + 20.]
-                        pcd_np_part = pcd_np_part[pcd_np_part[:, 1] > y_cur]
-                        pcd_np_part = pcd_np_part[pcd_np_part[:, 1] < y_cur + 20.]
+                while ts[ts_idx] < window[0]:
+                    ts_idx += 1
+                while ts[ts_idx] <= window[1]:
+                # x_cur = np.min(pcd_np, axis=0)[0]
+                # while x_cur + 20. < np.max(pcd_np, axis=0)[0]:
+                #     y_cur = np.min(pcd_np, axis=0)[1]
+                #     while y_cur + 20. < np.max(pcd_np, axis=0)[1]:
+                        pcd_center = poses[ts_idx][:3, -1]
+                        ts_idx += 10
+
+                        pcd_np_part = pcd_np[pcd_np[:, 0] > pcd_center[0] - 10.]
+                        pcd_np_part = pcd_np_part[pcd_np_part[:, 0] < pcd_center[0] + 10.]
+                        pcd_np_part = pcd_np_part[pcd_np_part[:, 1] > pcd_center[1] - 10.]
+                        pcd_np_part = pcd_np_part[pcd_np_part[:, 1] < pcd_center[1] + 10.]
 
                         if pcd_np_part.shape[0] > 50000:# and pcd_np_part.shape[0] < 250000:
 
-                            pcd_center = np.array([x_cur + 10., y_cur + 10., np.min(pcd_np_part, axis=0)[2]])
+                            # pcd_center = np.array([x_cur + 10., y_cur + 10., np.min(pcd_np_part, axis=0)[2]])
                             pcd_np_part = pcd_np_part - pcd_center
                             
                             bbox_part = []
                             for i in range(len(all_bboxes)):
-                                if bboxes_window[i][0] == window:
+                                if bboxes_window[i][0] == window[0]:
                                     corners = all_bboxes[i]
-                                    if np.min(corners, axis=0)[0] > x_cur-0.5 and np.min(corners, axis=0)[1] > y_cur-0.5 and \
-                                        np.max(corners, axis=0)[0] < x_cur + 20.5 and np.max(corners, axis=0)[1] < y_cur + 20.5 and \
+                                    if np.average(corners, axis=0)[0] > pcd_center[0] - 10. and np.average(corners, axis=0)[1] > pcd_center[1] - 10. and \
+                                        np.average(corners, axis=0)[0] < pcd_center[0] + 10. and np.average(corners, axis=0)[1] < pcd_center[1] + 10. and \
                                         semanticlabels[i] in kitti2me.keys():
 
                                         # print(corners)
@@ -263,8 +273,8 @@ class Kitti360DetectionDataset(Dataset):
                                 # else:
                                 #     obj_cnt[len(bbox_part)] += 1
 
-                        y_cur += 20.
-                    x_cur += 20.
+                    #     y_cur += 20.
+                    # x_cur += 20.
         
         # print(obj_cnt)
         # print("l:   ", minl, maxl)

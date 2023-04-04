@@ -37,8 +37,11 @@ class BoxProcessor(object):
         # scene_scale[:, 1] = 4.0
         # scene_scale[:, 2] = 5.0
         scene_scale[:, 0] = 20.0    #fixed scene scale for kitti-360
-        scene_scale[:, 1] = 20.0
-        scene_scale[:, 2] = 20.0
+        scene_scale[:, 1] = 6.0
+        scene_scale[:, 2] = 5.0
+        # scene_scale[:, 0] = 20.0    #fixed scene scale for kitti-360
+        # scene_scale[:, 1] = 20.0
+        # scene_scale[:, 2] = 20.0
         scene_scale = torch.clamp(scene_scale, min=1e-1)
         size_unnormalized = scale_points(size_normalized, mult_factor=scene_scale)
         return size_unnormalized
@@ -173,8 +176,8 @@ class Model3DETR(nn.Module):
         encoder_xyz_cp = encoder_xyz.clone()
         # encoder_xyz_cp[encoder_xyz_cp[:,:,2] < -1.5] = torch.zeros(3).to(encoder_xyz_cp.get_device())   #for kitti
         # encoder_xyz_cp[encoder_xyz_cp[:,:,2] > -0.5] = torch.zeros(3).to(encoder_xyz_cp.get_device())
-        encoder_xyz_cp[encoder_xyz_cp[:,:,2] < 0.5] = torch.zeros(3).to(encoder_xyz_cp.get_device())   #for kitti-360
-        encoder_xyz_cp[encoder_xyz_cp[:,:,2] > 2.5] = torch.zeros(3).to(encoder_xyz_cp.get_device())
+        encoder_xyz_cp[encoder_xyz_cp[:,:,2] < -0.5] = torch.zeros(3).to(encoder_xyz_cp.get_device())   #for kitti-360
+        encoder_xyz_cp[encoder_xyz_cp[:,:,2] > 0.5] = torch.zeros(3).to(encoder_xyz_cp.get_device())
         query_inds = furthest_point_sample(encoder_xyz_cp, self.num_queries)
         query_inds = query_inds.long()
         query_xyz = [torch.gather(encoder_xyz_cp[..., x], 1, query_inds) for x in range(3)]
